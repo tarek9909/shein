@@ -371,7 +371,7 @@ def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[s
     Uses persistent profile, so typically runs once per profile.
     """
     page.goto(f"{base_url}/user/login", wait_until="domcontentloaded")
-    page.wait_for_timeout(1000)
+    page.wait_for_timeout(45000)
 
     # If already logged in, /user/login often redirects away.
     if "login" not in page.url.lower():
@@ -404,7 +404,7 @@ def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[s
 
     # Step 2: password
     password_input = page.locator('input[type="password"]').first
-    password_input.wait_for(state="visible", timeout=15000)
+    password_input.wait_for(state="visible", timeout=45000)
     password_input.click()
     password_input.fill(acc["shein_password"])
 
