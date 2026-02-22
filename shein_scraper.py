@@ -371,7 +371,7 @@ def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[s
     Uses persistent profile, so typically runs once per profile.
     """
     page.goto(f"{base_url}/user/login", wait_until="domcontentloaded")
-    page.wait_for_timeout(45000)
+    page.wait_for_timeout(1000)
 
     # If already logged in, /user/login often redirects away.
     if "login" not in page.url.lower():
@@ -404,7 +404,7 @@ def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[s
 
     # Step 2: password
     password_input = page.locator('input[type="password"]').first
-    password_input.wait_for(state="visible", timeout=45000)
+    password_input.wait_for(state="visible", timeout=15000)
     password_input.click()
     password_input.fill(acc["shein_password"])
 
@@ -444,6 +444,19 @@ def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[s
         page.wait_for_timeout(6000)
 
     except TimeoutError:
+        pass
+
+    # Step 4: optional post-login popup (Skip)
+    try:
+        skip_btn = page.locator('[aria-label="تخطي"]').first
+        if skip_btn.count() == 0:
+            skip_btn = page.locator("button:has-text('تخطي')").first
+        skip_btn.wait_for(state="visible", timeout=5000)
+        skip_btn.click()
+        page.wait_for_timeout(1000)
+    except TimeoutError:
+        pass
+    except Exception:
         pass
 
     # confirm login by visiting fetch URL immediately when provided
