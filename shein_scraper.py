@@ -379,7 +379,20 @@ def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[s
 
     # Step 1: email
     email_input = page.locator("input#continue-alias-input").first
-    email_input.wait_for(state="visible", timeout=15000)
+    try:
+        email_input.wait_for(state="visible", timeout=30000)
+    except TimeoutError:
+        # Render/headless can re-render the login form while the locator is already present.
+        # If it is actually visible now, continue. Otherwise try a broader fallback selector.
+        try:
+            if not email_input.is_visible():
+                email_input = page.locator(
+                    'input#continue-alias-input, input[aria-label*="البريد"], input[type="text"]'
+                ).first
+                email_input.wait_for(state="visible", timeout=15000)
+        except Exception:
+            page.screenshot(path="debug_email_input_timeout.png", full_page=True)
+            raise
     email_input.click()
     email_input.press("Control+A")
     email_input.type(acc["shein_email"], delay=40)
