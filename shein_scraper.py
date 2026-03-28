@@ -3,14 +3,91 @@ import os
 import re
 import json
 from typing import Dict, Any, Optional, List
+from urllib.parse import urlsplit, urlunsplit
 
 import anyio
-from playwright.sync_api import sync_playwright, Page, TimeoutError
+from playwright.sync_api import BrowserContext, sync_playwright, Page, TimeoutError
 
 from gmail import get_latest_shein_code
 
 PROFILES_DIR = "profiles"
-DEFAULT_BASE_URL = "https://ar.shein.com"
+DEFAULT_BASE_URL = (os.getenv("SHEIN_BASE_URL") or "https://ar.shein.com").strip().rstrip("/")
+DEFAULT_LOCALE = (os.getenv("SHEIN_LOCALE") or "ar-SA").strip()
+DEFAULT_TIMEZONE = (os.getenv("SHEIN_TIMEZONE_ID") or "Asia/Riyadh").strip()
+DEFAULT_ACCEPT_LANGUAGE = (
+    os.getenv("SHEIN_ACCEPT_LANGUAGE") or "ar-SA,ar;q=0.9,en;q=0.8"
+).strip()
+FORCE_SHEIN_HOST = (os.getenv("SHEIN_FORCE_HOST") or "1").strip().lower() in ("1", "true", "yes")
+DEFAULT_GEO = {
+    "latitude": float(os.getenv("SHEIN_GEO_LAT") or "24.7136"),
+    "longitude": float(os.getenv("SHEIN_GEO_LON") or "46.6753"),
+    "accuracy": float(os.getenv("SHEIN_GEO_ACCURACY") or "100"),
+}
+
+
+def _preferred_host(base_url: str) -> str:
+    return (urlsplit(base_url).netloc or "").strip().lower()
+
+
+def _force_url_host(url: str, base_url: str) -> str:
+    if not FORCE_SHEIN_HOST or not url:
+        return url
+
+    parts = urlsplit(url)
+    target_host = _preferred_host(base_url)
+    current_host = (parts.netloc or "").strip().lower()
+    if not target_host or not current_host or current_host == target_host:
+        return url
+    if not current_host.endswith("shein.com"):
+        return url
+
+    return urlunsplit((parts.scheme or "https", target_host, parts.path, parts.query, parts.fragment))
+
+
+def _goto_preferred(page: Page, url: str, base_url: str, wait_until: str = "domcontentloaded") -> None:
+    target_url = _force_url_host(url, base_url)
+
+    for _ in range(3):
+        page.goto(target_url, wait_until=wait_until)
+        forced_current = _force_url_host(page.url, base_url)
+        if forced_current == page.url or forced_current == target_url:
+            return
+        target_url = forced_current
+        page.wait_for_timeout(400)
+
+
+def _install_host_guard(ctx: BrowserContext, base_url: str) -> None:
+    if not FORCE_SHEIN_HOST:
+        return
+
+    def _rewrite(route, request):
+        if request.is_navigation_request():
+            forced = _force_url_host(request.url, base_url)
+            if forced != request.url:
+                route.continue_(url=forced)
+                return
+        route.continue_()
+
+    ctx.route("**/*", _rewrite)
+
+
+def _build_context(p, profile_path: str, headless: bool) -> BrowserContext:
+    ctx = p.chromium.launch_persistent_context(
+        profile_path,
+        headless=headless,
+        locale=DEFAULT_LOCALE,
+        timezone_id=DEFAULT_TIMEZONE,
+        geolocation=DEFAULT_GEO,
+        permissions=["geolocation"],
+        viewport={"width": 1280, "height": 800},
+        args=[f"--lang={DEFAULT_LOCALE}"],
+    )
+    ctx.set_extra_http_headers(
+        {
+            "Accept-Language": DEFAULT_ACCEPT_LANGUAGE,
+        }
+    )
+    return ctx
 
 
 # =========================
@@ -370,7 +447,7 @@ def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[s
     Logs in. If verification dialog appears, reads code from Gmail and submits it.
     Uses persistent profile, so typically runs once per profile.
     """
-    page.goto(f"{base_url}/user/login", wait_until="domcontentloaded")
+    _goto_preferred(page, f"{base_url}/user/login", base_url, wait_until="domcontentloaded")
     page.wait_for_timeout(1000)
 
     # If already logged in, /user/login often redirects away.
@@ -379,7 +456,20 @@ def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[s
 
     # Step 1: email
     email_input = page.locator("input#continue-alias-input").first
-    email_input.wait_for(state="visible", timeout=15000)
+    try:
+        email_input.wait_for(state="visible", timeout=30000)
+    except TimeoutError:
+        # Render/headless can re-render the login form while the locator is already present.
+        # If it is actually visible now, continue. Otherwise try a broader fallback selector.
+        try:
+            if not email_input.is_visible():
+                email_input = page.locator(
+                    'input#continue-alias-input, input[aria-label*="البريد"], input[type="text"]'
+                ).first
+                email_input.wait_for(state="visible", timeout=15000)
+        except Exception:
+            page.screenshot(path="debug_email_input_timeout.png", full_page=True)
+            raise
     email_input.click()
     email_input.press("Control+A")
     email_input.type(acc["shein_email"], delay=40)
@@ -446,9 +536,22 @@ def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[s
     except TimeoutError:
         pass
 
+    # Step 4: optional post-login popup (Skip)
+    try:
+        skip_btn = page.locator('[aria-label="تخطي"]').first
+        if skip_btn.count() == 0:
+            skip_btn = page.locator("button:has-text('تخطي')").first
+        skip_btn.wait_for(state="visible", timeout=5000)
+        skip_btn.click()
+        page.wait_for_timeout(1000)
+    except TimeoutError:
+        pass
+    except Exception:
+        pass
+
     # confirm login by visiting fetch URL immediately when provided
     target_url = fetch_url or f"{base_url}/user/orders/list"
-    page.goto(target_url, wait_until="domcontentloaded")
+    _goto_preferred(page, target_url, base_url, wait_until="domcontentloaded")
     page.wait_for_timeout(1000)
 
 
@@ -457,7 +560,7 @@ def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[s
 # =========================
 def fetch_one_order(page: Page, base_url: str, order_no: str) -> Dict[str, Any]:
     track_url = f"{base_url}/orders/track?billno={order_no}"
-    page.goto(track_url, wait_until="domcontentloaded")
+    _goto_preferred(page, track_url, base_url, wait_until="domcontentloaded")
     page.wait_for_timeout(1200)
 
     print("[DEBUG] Track page final URL:", page.url)
@@ -483,7 +586,7 @@ def fetch_one_order(page: Page, base_url: str, order_no: str) -> Dict[str, Any]:
         if pkg:
             carrier = pkg.get("carrier_name")
             tracking_no = pkg.get("track_num")
-            carrier_track_url = pkg.get("track_url") or track_url
+            carrier_track_url = _force_url_host(pkg.get("track_url") or track_url, base_url)
             tracks = pkg.get("logistics_tracks_list") or []
             split_info = _collect_split_info(ssr_json, ssr_text, pkg)
 
@@ -584,7 +687,7 @@ def fetch_one_order(page: Page, base_url: str, order_no: str) -> Dict[str, Any]:
 # =========================
 def fetch_one_order_weight(page: Page, base_url: str, order_no: str) -> Dict[str, Any]:
     track_url = f"{base_url}/orders/track?billno={order_no}"
-    page.goto(track_url, wait_until="domcontentloaded")
+    _goto_preferred(page, track_url, base_url, wait_until="domcontentloaded")
     page.wait_for_timeout(1200)
 
     html = page.content()
@@ -655,12 +758,8 @@ def _fetch_weight_sync(
     target_track_url = f"{base_url}/orders/track?billno={order_no}"
 
     with sync_playwright() as p:
-        ctx = p.chromium.launch_persistent_context(
-            profile_path,
-            headless=headless,
-            locale="ar",
-            viewport={"width": 1280, "height": 800},
-        )
+        ctx = _build_context(p, profile_path, headless)
+        _install_host_guard(ctx, base_url)
         page = ctx.new_page()
         try:
             ensure_logged_in(page, base_url, acc, fetch_url=target_track_url)
@@ -719,12 +818,8 @@ def _fetch_tracking_sync(
     target_track_url = f"{base_url}/orders/track?billno={order_no}"
 
     with sync_playwright() as p:
-        ctx = p.chromium.launch_persistent_context(
-            profile_path,
-            headless=headless,
-            locale="ar",
-            viewport={"width": 1280, "height": 800},
-        )
+        ctx = _build_context(p, profile_path, headless)
+        _install_host_guard(ctx, base_url)
         page = ctx.new_page()
         try:
             ensure_logged_in(page, base_url, acc, fetch_url=target_track_url)
