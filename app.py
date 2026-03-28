@@ -1,5 +1,4 @@
-# app.py (direct-only minimal version, no DB dependency)
-
+# app.py
 import os
 import traceback
 from dotenv import load_dotenv
