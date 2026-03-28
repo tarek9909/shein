@@ -18,6 +18,7 @@ DEFAULT_ACCEPT_LANGUAGE = (
     os.getenv("SHEIN_ACCEPT_LANGUAGE") or "ar-SA,ar;q=0.9,en;q=0.8"
 ).strip()
 FORCE_SHEIN_HOST = (os.getenv("SHEIN_FORCE_HOST") or "1").strip().lower() in ("1", "true", "yes")
+NAVIGATION_TIMEOUT_MS = int((os.getenv("SHEIN_NAVIGATION_TIMEOUT_MS") or "90000").strip())
 DEFAULT_GEO = {
     "latitude": float(os.getenv("SHEIN_GEO_LAT") or "24.7136"),
     "longitude": float(os.getenv("SHEIN_GEO_LON") or "46.6753"),
@@ -48,7 +49,7 @@ def _goto_preferred(page: Page, url: str, base_url: str, wait_until: str = "domc
     target_url = _force_url_host(url, base_url)
 
     for _ in range(3):
-        page.goto(target_url, wait_until=wait_until)
+        page.goto(target_url, wait_until=wait_until, timeout=NAVIGATION_TIMEOUT_MS)
         forced_current = _force_url_host(page.url, base_url)
         if forced_current == page.url or forced_current == target_url:
             return
