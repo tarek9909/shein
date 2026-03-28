@@ -494,8 +494,20 @@ def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[s
     cont.click()
 
     # Step 2: password
-    password_input = page.locator('input[type="password"]').first
-    password_input.wait_for(state="visible", timeout=15000)
+    page.wait_for_timeout(2500)
+    password_input = page.locator(
+        'input[type="password"], input[autocomplete="current-password"], input[aria-label*="كلمة"], input[placeholder*="كلمة"]'
+    ).first
+    try:
+        password_input.wait_for(state="visible", timeout=30000)
+    except TimeoutError:
+        try:
+            page.screenshot(path="debug_password_not_visible_after_continue.png", full_page=True)
+            with open("debug_password_not_visible_after_continue.html", "w", encoding="utf-8") as f:
+                f.write(page.content())
+        except Exception:
+            pass
+        raise
     password_input.click()
     password_input.fill(acc["shein_password"])
 
