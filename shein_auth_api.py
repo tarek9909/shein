@@ -20,6 +20,7 @@ DEFAULT_PAGE_SOURCE = "continue"
 DEFAULT_LOGIN_FROM = "login"
 DEFAULT_DA_ID = "2-7-108"
 DEFAULT_VERIFY_TIMEOUT_SEC = 180
+DEFAULT_RISK_VERIFY_TIMEOUT_SEC = 240
 EMAIL_CAPTCHA_EXTRA_PARAM = {"akka": "1000114"}
 EMAIL_CAPTCHA_VALIDATE_TYPE = "email_captcha"
 
@@ -190,6 +191,40 @@ WEBPACK_AUTH_HELPER = r"""
       return await http(config || {});
     },
 
+    async runLoginRiskVerify(args) {
+      const fn = this.getExportByPattern("risk control verification failed");
+      if (!fn) {
+        throw new Error("Unable to find SHEIN login risk verify export");
+      }
+
+      const timeoutMs = (args && args.timeoutMs) || 240000;
+      return await new Promise((resolve, reject) => {
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          reject(new Error("Timed out waiting for SHEIN risk verification"));
+        }, timeoutMs);
+
+        const finish = (handler, value) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timer);
+          handler(value);
+        };
+
+        try {
+          fn(args.loginResponse || {}, args.payload || {}, result => finish(resolve, result || {}));
+        } catch (err) {
+          finish(reject, err);
+        }
+      });
+    },
+
     getCountryContext() {
       const selectors = [
         ".page-login__phoneArea",
@@ -330,6 +365,23 @@ def _runtime_call_export(page: Page, pattern: str, payload: Optional[Dict[str, A
 
 def _runtime_call_http(page: Page, config: Dict[str, Any]) -> Dict[str, Any]:
     return page.evaluate("(config) => window.__sheinApiAuth.callHttp(config)", config)
+
+
+def _runtime_run_login_risk_verify(
+    page: Page,
+    login_response: Dict[str, Any],
+    payload: Dict[str, Any],
+    *,
+    timeout_sec: int = DEFAULT_RISK_VERIFY_TIMEOUT_SEC,
+) -> Dict[str, Any]:
+    return page.evaluate(
+        "(args) => window.__sheinApiAuth.runLoginRiskVerify(args)",
+        {
+            "loginResponse": login_response,
+            "payload": payload,
+            "timeoutMs": int(timeout_sec * 1000),
+        },
+    )
 
 
 def _call_pattern_or_http(
@@ -548,7 +600,13 @@ def _submit_email_verification(page: Page, acc: Dict[str, str], login_response: 
     return check_response
 
 
-def _complete_login_risk_challenge(page: Page, acc: Dict[str, str], login_response: Dict[str, Any]) -> Dict[str, str]:
+def _complete_login_risk_challenge(
+    page: Page,
+    acc: Dict[str, str],
+    login_response: Dict[str, Any],
+    *,
+    biz_uuid: str,
+) -> Dict[str, str]:
     risk_details = _login_risk_details(login_response)
 
     if not risk_details["risk_id"] or not risk_details["validate_type"]:
@@ -557,15 +615,43 @@ def _complete_login_risk_challenge(page: Page, acc: Dict[str, str], login_respon
             f"(code={risk_details['code'] or 'unknown'} msg={risk_details['msg']!r})"
         )
 
+    login_payload = _login_payload(acc, biz_uuid=biz_uuid)
+
+    try:
+        verify_result = _runtime_run_login_risk_verify(page, login_response, login_payload)
+        verify_type = str((verify_result or {}).get("type") or "")
+        verify_payload = (verify_result or {}).get("paramsData") or {}
+        validate_token = str(verify_payload.get("validate_token") or "")
+        verified_risk_id = str(verify_payload.get("risk_id") or risk_details["risk_id"] or "")
+        _debug_log(
+            "runtime risk verify result",
+            page_url=page.url,
+            verify_type=verify_type or None,
+            has_validate_token=bool(validate_token),
+            risk_id=verified_risk_id or None,
+            challenge_type=risk_details["validate_type"] or None,
+        )
+        if validate_token and verified_risk_id:
+            return {
+                "validate_token": validate_token,
+                "risk_id": verified_risk_id,
+            }
+    except Exception as exc:
+        _debug_log(
+            "runtime risk verify exception",
+            page_url=page.url,
+            challenge_type=risk_details["validate_type"] or None,
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
+
     if risk_details["validate_type"] == EMAIL_CAPTCHA_VALIDATE_TYPE:
         _submit_email_verification(page, acc, login_response)
     else:
         raise RuntimeError(
-            "SHEIN requested unsupported login verification "
-            f"type={risk_details['validate_type']!r} "
-            f"scene={risk_details['validate_scene']!r} "
-            f"code={risk_details['code'] or 'unknown'} "
-            f"msg={risk_details['msg']!r}"
+            "SHEIN requested login verification but the in-page verifier did not return a token "
+            f"(type={risk_details['validate_type']!r} scene={risk_details['validate_scene']!r} "
+            f"code={risk_details['code'] or 'unknown'} msg={risk_details['msg']!r})"
         )
 
     if not risk_details["validate_token"]:
@@ -608,7 +694,7 @@ def ensure_logged_in_via_api(
 
     login_response = _runtime_call_export(page, COMMON_LOGIN_PATTERN, _login_payload(acc, biz_uuid=biz_uuid))
     if _has_login_risk_challenge(login_response):
-        risk_tokens = _complete_login_risk_challenge(page, acc, login_response)
+        risk_tokens = _complete_login_risk_challenge(page, acc, login_response, biz_uuid=biz_uuid)
         login_response = _runtime_call_export(
             page,
             COMMON_LOGIN_PATTERN,
