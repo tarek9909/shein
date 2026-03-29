@@ -4,6 +4,7 @@ import time
 import imaplib
 import email
 from email.header import decode_header
+from email.utils import parsedate_to_datetime
 
 SHEIN_FROM_HINTS = ("shein", "sheinnotice.com", "noreply@sheinnotice.com")
 
@@ -39,6 +40,25 @@ def _extract_text(msg) -> str:
         payload = msg.get_payload(decode=True) or b""
         body = payload.decode(errors="ignore")
     return body
+
+
+def _message_timestamp(msg) -> float | None:
+    raw_date = msg.get("Date")
+    if not raw_date:
+        return None
+    try:
+        dt = parsedate_to_datetime(raw_date)
+        if dt is None:
+            return None
+        return dt.timestamp()
+    except Exception:
+        return None
+
+
+def _mask_emails(text: str) -> str:
+    if not text:
+        return ""
+    return re.sub(r"([A-Za-z0-9._%+-]{1,3})[A-Za-z0-9._%+-]*(@[A-Za-z0-9.-]+\.[A-Za-z]{2,})", r"\1***\2", text)
 
 def _is_junk_code(code: str) -> bool:
     # reject 00000, 111111 etc.
@@ -85,52 +105,105 @@ def _pick_best_code(body: str) -> str | None:
 
     return None
 
-def get_latest_shein_code(gmail_email: str, gmail_app_password: str, timeout_sec: int = 180) -> str | None:
+def get_latest_shein_code_details(
+    gmail_email: str,
+    gmail_app_password: str,
+    timeout_sec: int = 180,
+    received_after_ts: float | None = None,
+) -> dict | None:
     """
-    Polls Gmail inbox for latest SHEIN verification email and returns 5-6 digit code.
+    Polls Gmail inbox for latest SHEIN verification email and returns code metadata.
     Requires Gmail App Password.
     """
     start = time.time()
+    min_ts = (received_after_ts - 30.0) if received_after_ts else None
+    poll_delay_sec = 5
+
+    def _safe_logout(mail) -> None:
+        try:
+            mail.logout()
+        except Exception:
+            pass
 
     while time.time() - start < timeout_sec:
-        mail = imaplib.IMAP4_SSL("imap.gmail.com")
+        mail = imaplib.IMAP4_SSL("imap.gmail.com", timeout=30)
         try:
             mail.login(gmail_email, gmail_app_password)
         except imaplib.IMAP4.error as e:
-            mail.logout()
+            _safe_logout(mail)
             raise RuntimeError(
                 "Gmail IMAP login failed. Check Gmail address/app password and make sure IMAP is enabled."
             ) from e
-        mail.select("INBOX")
+        try:
+            mail.select("INBOX")
 
-        # Prefer unseen; fallback to all
-        status, messages = mail.search(None, "UNSEEN")
-        if status != "OK" or not messages[0]:
-            status, messages = mail.search(None, "ALL")
+            # Prefer unseen; fallback to all
+            status, messages = mail.search(None, "UNSEEN")
+            if status != "OK" or not messages[0]:
+                status, messages = mail.search(None, "ALL")
 
-        if status == "OK" and messages and messages[0]:
-            ids = messages[0].split()
+            if status == "OK" and messages and messages[0]:
+                ids = messages[0].split()
 
-            # newest first
-            for msg_id in reversed(ids[-60:]):
-                status, data = mail.fetch(msg_id, "(RFC822)")
-                if status != "OK":
-                    continue
+                # newest first
+                for msg_id in reversed(ids[-60:]):
+                    try:
+                        status, data = mail.fetch(msg_id, "(RFC822)")
+                    except imaplib.IMAP4.abort as e:
+                        print(f"[GMAIL DEBUG] fetch abort for msg_id={msg_id!r}: {e}")
+                        raise
+                    except imaplib.IMAP4.error as e:
+                        print(f"[GMAIL DEBUG] fetch error for msg_id={msg_id!r}: {e}")
+                        continue
 
-                msg = email.message_from_bytes(data[0][1])
-                from_hdr = _decode(msg.get("From", "")).lower()
-                subj = _decode(msg.get("Subject", "")).lower()
+                    if status != "OK" or not data or not isinstance(data[0], tuple):
+                        continue
 
-                if not any(h in from_hdr for h in SHEIN_FROM_HINTS) and "shein" not in subj:
-                    continue
+                    msg = email.message_from_bytes(data[0][1])
+                    from_hdr = _decode(msg.get("From", "")).lower()
+                    subj = _decode(msg.get("Subject", "")).lower()
 
-                body = _extract_text(msg)
-                code = _pick_best_code(body)
-                if code:
-                    mail.logout()
-                    return code
+                    if not any(h in from_hdr for h in SHEIN_FROM_HINTS) and "shein" not in subj:
+                        continue
 
-        mail.logout()
-        time.sleep(5)
+                    msg_ts = _message_timestamp(msg)
+                    if min_ts is not None and msg_ts is not None and msg_ts < min_ts:
+                        continue
+
+                    body = _extract_text(msg)
+                    code = _pick_best_code(body)
+                    if code:
+                        _safe_logout(mail)
+                        return {
+                            "code": code,
+                            "message_ts": msg_ts,
+                            "subject": _mask_emails(_decode(msg.get("Subject", ""))),
+                            "from": _mask_emails(_decode(msg.get("From", ""))),
+                        }
+        except imaplib.IMAP4.abort as e:
+            print(f"[GMAIL DEBUG] reconnecting after IMAP abort: {e}")
+        except TimeoutError as e:
+            print(f"[GMAIL DEBUG] reconnecting after socket timeout: {e}")
+        finally:
+            _safe_logout(mail)
+
+        time.sleep(poll_delay_sec)
 
     return None
+
+
+def get_latest_shein_code(
+    gmail_email: str,
+    gmail_app_password: str,
+    timeout_sec: int = 180,
+    received_after_ts: float | None = None,
+) -> str | None:
+    details = get_latest_shein_code_details(
+        gmail_email,
+        gmail_app_password,
+        timeout_sec=timeout_sec,
+        received_after_ts=received_after_ts,
+    )
+    if not details:
+        return None
+    return details.get("code")

@@ -6,9 +6,9 @@ from typing import Dict, Any, Optional, List
 from urllib.parse import urlsplit, urlunsplit
 
 import anyio
-from playwright.sync_api import BrowserContext, sync_playwright, Page, TimeoutError
+from playwright.sync_api import BrowserContext, sync_playwright, Page
 
-from gmail import get_latest_shein_code
+from shein_auth_api import ensure_logged_in_via_api
 
 PROFILES_DIR = "profiles"
 DEFAULT_BASE_URL = (os.getenv("SHEIN_BASE_URL") or "https://ar.shein.com").strip().rstrip("/")
@@ -441,7 +441,7 @@ def _is_delivered_from_last_event(last: dict) -> bool:
 
 
 # =========================
-# Login (uses Gmail code)
+# Login (legacy form flow retained below)
 # =========================
 def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[str] = None) -> None:
     """
@@ -566,6 +566,44 @@ def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[s
     target_url = fetch_url or f"{base_url}/user/orders/list"
     _goto_preferred(page, target_url, base_url, wait_until="domcontentloaded")
     page.wait_for_timeout(1000)
+
+
+# Override the legacy form-login function above with the API-backed flow.
+def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[str] = None) -> None:
+    """
+    Logs in with SHEIN's internal API calls inside the browser runtime.
+    Uses persistent profile, so typically runs once per profile.
+    """
+    ensure_logged_in_via_api(page, base_url, acc, fetch_url=fetch_url)
+
+
+def _attach_page_debug(page: Page) -> None:
+    def on_console(msg):
+        try:
+            if msg.type in ("error", "warning"):
+                print(f"[PAGE DEBUG] console.{msg.type}: {msg.text}")
+        except Exception:
+            pass
+
+    def on_page_error(exc):
+        try:
+            print(f"[PAGE DEBUG] pageerror: {exc}")
+        except Exception:
+            pass
+
+    def on_request_failed(request):
+        try:
+            failure = request.failure() or {}
+            print(
+                f"[PAGE DEBUG] requestfailed: method={request.method} url={request.url} "
+                f"error={failure.get('errorText')!r}"
+            )
+        except Exception:
+            pass
+
+    page.on("console", on_console)
+    page.on("pageerror", on_page_error)
+    page.on("requestfailed", on_request_failed)
 
 
 # =========================
@@ -774,6 +812,7 @@ def _fetch_weight_sync(
         ctx = _build_context(p, profile_path, headless)
         _install_host_guard(ctx, base_url)
         page = ctx.new_page()
+        _attach_page_debug(page)
         try:
             ensure_logged_in(page, base_url, acc, fetch_url=target_track_url)
             return fetch_one_order_weight(page, base_url, order_no)
@@ -834,6 +873,7 @@ def _fetch_tracking_sync(
         ctx = _build_context(p, profile_path, headless)
         _install_host_guard(ctx, base_url)
         page = ctx.new_page()
+        _attach_page_debug(page)
         try:
             ensure_logged_in(page, base_url, acc, fetch_url=target_track_url)
             info = fetch_one_order(page, base_url, order_no)
