@@ -2,6 +2,7 @@
 import os
 import re
 import json
+import time
 from typing import Dict, Any, Optional, List
 from urllib.parse import urlsplit, urlunsplit
 
@@ -443,6 +444,65 @@ def _is_delivered_from_last_event(last: dict) -> bool:
 # =========================
 # Login (legacy form flow retained below)
 # =========================
+def _first_visible_locator(page: Page, selectors: List[str]):
+    for selector in selectors:
+        locator = page.locator(selector).first
+        try:
+            if locator.count() and locator.is_visible():
+                return locator
+        except Exception:
+            continue
+    return None
+
+
+def _wait_for_password_step(page: Page, timeout_ms: int = 30000):
+    password_selectors = [
+        'input[type="password"]',
+        'input[autocomplete="current-password"]',
+        'input[name*="password" i]',
+        'input[id*="password" i]',
+        'input[aria-label*="كلمة"]',
+        'input[placeholder*="كلمة"]',
+        'input[aria-label*="Password" i]',
+        'input[placeholder*="Password" i]',
+    ]
+    bridge_selectors = [
+        "button.page__login_mainButton:has-text('متابعة تسجيل الدخول')",
+        "button:has-text('متابعة تسجيل الدخول')",
+        "button:has-text('تسجيل الدخول بحساب بريد إلكتروني')",
+        "button:has-text('استمر')",
+        "button:has-text('متابعة')",
+        "button:has-text('Continue')",
+        "a:has-text('Continue')",
+    ]
+
+    deadline = time.time() + (timeout_ms / 1000.0)
+    while time.time() < deadline:
+        password_input = _first_visible_locator(page, password_selectors)
+        if password_input:
+            return password_input
+
+        bridge_button = _first_visible_locator(page, bridge_selectors)
+        if bridge_button:
+            try:
+                bridge_button.click()
+                page.wait_for_timeout(1200)
+                continue
+            except Exception:
+                pass
+
+        page.wait_for_timeout(500)
+
+    password_input = page.locator(
+        'input[type="password"], input[autocomplete="current-password"], '
+        'input[name*="password" i], input[id*="password" i], '
+        'input[aria-label*="كلمة"], input[placeholder*="كلمة"], '
+        'input[aria-label*="Password" i], input[placeholder*="Password" i]'
+    ).first
+    password_input.wait_for(state="visible", timeout=1)
+    return password_input
+
+
 def _ensure_logged_in_via_form(
     page: Page,
     base_url: str,
@@ -504,7 +564,7 @@ def _ensure_logged_in_via_form(
         'input[type="password"], input[autocomplete="current-password"], input[aria-label*="كلمة"], input[placeholder*="كلمة"]'
     ).first
     try:
-        password_input.wait_for(state="visible", timeout=30000)
+        password_input = _wait_for_password_step(page, timeout_ms=30000)
     except TimeoutError:
         try:
             page.screenshot(path="debug_password_not_visible_after_continue.png", full_page=True)
