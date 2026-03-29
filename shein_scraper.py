@@ -443,7 +443,12 @@ def _is_delivered_from_last_event(last: dict) -> bool:
 # =========================
 # Login (legacy form flow retained below)
 # =========================
-def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[str] = None) -> None:
+def _ensure_logged_in_via_form(
+    page: Page,
+    base_url: str,
+    acc: dict,
+    fetch_url: Optional[str] = None,
+) -> None:
     """
     Logs in. If verification dialog appears, reads code from Gmail and submits it.
     Uses persistent profile, so typically runs once per profile.
@@ -568,13 +573,44 @@ def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[s
     page.wait_for_timeout(1000)
 
 
+def _should_fallback_to_form_login(exc: Exception) -> bool:
+    message = str(exc or "").strip().lower()
+    if not message:
+        return False
+
+    risk_markers = (
+        "common_login failed with code=402906",
+        "common_login failed with code=402922",
+        "risk challenge",
+        "risk verify",
+        "login verification",
+        "validate_token",
+        "js_challenge",
+        "slide",
+        "click",
+        "captcha",
+    )
+    return any(marker in message for marker in risk_markers)
+
+
 # Override the legacy form-login function above with the API-backed flow.
 def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[str] = None) -> None:
     """
     Logs in with SHEIN's internal API calls inside the browser runtime.
     Uses persistent profile, so typically runs once per profile.
     """
-    ensure_logged_in_via_api(page, base_url, acc, fetch_url=fetch_url)
+    try:
+        ensure_logged_in_via_api(page, base_url, acc, fetch_url=fetch_url)
+    except RuntimeError as exc:
+        if not _should_fallback_to_form_login(exc):
+            raise
+
+        print(
+            "[AUTH DEBUG] API login hit a SHEIN verification challenge; "
+            "falling back to the visible browser login flow.",
+            f"error={exc}",
+        )
+        _ensure_logged_in_via_form(page, base_url, acc, fetch_url=fetch_url)
 
 
 def _attach_page_debug(page: Page) -> None:
