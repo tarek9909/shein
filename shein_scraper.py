@@ -704,6 +704,12 @@ def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[s
 
 
 def _attach_page_debug(page: Page) -> None:
+    auth_debug_patterns = (
+        "/user/common_login",
+        "/user/account/positioning",
+        "/risk/verify/identity/validation/",
+    )
+
     def on_console(msg):
         try:
             if msg.type in ("error", "warning"):
@@ -727,9 +733,39 @@ def _attach_page_debug(page: Page) -> None:
         except Exception:
             pass
 
+    def on_response(response):
+        try:
+            url = response.url or ""
+            if not any(pattern in url for pattern in auth_debug_patterns):
+                return
+
+            content_type = (response.headers or {}).get("content-type", "")
+            body = None
+            if "json" in content_type.lower():
+                try:
+                    body = response.json()
+                except Exception:
+                    body = response.text()
+            else:
+                body = response.text()
+
+            if isinstance(body, str) and len(body) > 12000:
+                body = body[:12000] + "...<truncated>"
+
+            print(
+                f"[AUTH DEBUG] network response: status={response.status} "
+                f"url={url} body={body!r}"
+            )
+        except Exception as exc:
+            try:
+                print(f"[PAGE DEBUG] response_log_error: {exc}")
+            except Exception:
+                pass
+
     page.on("console", on_console)
     page.on("pageerror", on_page_error)
     page.on("requestfailed", on_request_failed)
+    page.on("response", on_response)
 
 
 # =========================

@@ -574,6 +574,20 @@ def _log_login_risk_challenge(page: Page, login_response: Dict[str, Any]) -> Non
     )
 
 
+def _log_common_login_response(page: Page, login_response: Optional[Dict[str, Any]], stage: str) -> None:
+    code = _response_code(login_response)
+    if code == "0":
+        return
+    _debug_log(
+        "common_login response",
+        stage=stage,
+        page_url=page.url,
+        code=code or None,
+        msg=_response_message(login_response) or None,
+        response_json=_compact_json(login_response, limit=12000),
+    )
+
+
 def _risk_payload_from_login(login_response: Dict[str, Any]) -> Dict[str, Any]:
     info = (login_response or {}).get("info") or {}
     payload = copy.deepcopy(info.get("extend_info") or {})
@@ -792,6 +806,7 @@ def ensure_logged_in_via_api(
         raise RuntimeError("SHEIN positioning did not return a risk_id for login")
 
     login_response = _runtime_call_export(page, COMMON_LOGIN_PATTERN, _login_payload(acc, biz_uuid=biz_uuid))
+    _log_common_login_response(page, login_response, stage="initial")
     if _has_login_risk_challenge(login_response):
         _log_login_risk_challenge(page, login_response)
         risk_tokens = _complete_login_risk_challenge(page, acc, login_response, biz_uuid=biz_uuid)
@@ -805,6 +820,7 @@ def ensure_logged_in_via_api(
                 risk_id=risk_tokens["risk_id"],
             ),
         )
+        _log_common_login_response(page, login_response, stage="after_risk_verify")
 
     _raise_on_bad_response("common_login", login_response)
 
