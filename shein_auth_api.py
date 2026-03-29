@@ -21,6 +21,7 @@ DEFAULT_LOGIN_FROM = "login"
 DEFAULT_DA_ID = "2-7-108"
 DEFAULT_VERIFY_TIMEOUT_SEC = 180
 EMAIL_CAPTCHA_EXTRA_PARAM = {"akka": "1000114"}
+EMAIL_CAPTCHA_VALIDATE_TYPE = "email_captcha"
 
 WEBPACK_AUTH_HELPER = r"""
 () => {
@@ -404,6 +405,24 @@ def _login_payload(
     return payload
 
 
+def _login_risk_details(login_response: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    info = (login_response or {}).get("info") or {}
+    extend_info = info.get("extend_info") or {}
+    return {
+        "code": _response_code(login_response),
+        "msg": _response_message(login_response),
+        "risk_id": str(info.get("risk_id") or ""),
+        "validate_token": str(extend_info.get("validate_token") or ""),
+        "validate_type": str(extend_info.get("validate_type") or ""),
+        "validate_scene": str(extend_info.get("validate_scene") or ""),
+    }
+
+
+def _has_login_risk_challenge(login_response: Optional[Dict[str, Any]]) -> bool:
+    details = _login_risk_details(login_response)
+    return bool(details["risk_id"] and details["validate_type"])
+
+
 def _risk_payload_from_login(login_response: Dict[str, Any]) -> Dict[str, Any]:
     info = (login_response or {}).get("info") or {}
     payload = copy.deepcopy(info.get("extend_info") or {})
@@ -423,13 +442,20 @@ def _ensure_gmail_credentials(acc: Dict[str, str]) -> None:
 
 
 def _submit_email_verification(page: Page, acc: Dict[str, str], login_response: Dict[str, Any]) -> Dict[str, Any]:
+    risk_details = _login_risk_details(login_response)
+    if risk_details["validate_type"] != EMAIL_CAPTCHA_VALIDATE_TYPE:
+        raise RuntimeError(
+            "SHEIN requested unsupported verification type="
+            f"{risk_details['validate_type'] or 'unknown'}"
+        )
+
     resources_payload = _risk_payload_from_login(login_response)
     _debug_log(
         "risk challenge received",
         page_url=page.url,
-        risk_id=((login_response.get("info") or {}).get("risk_id") if login_response else None),
-        validate_type=((login_response.get("info") or {}).get("extend_info") or {}).get("validate_type"),
-        validate_scene=((login_response.get("info") or {}).get("extend_info") or {}).get("validate_scene"),
+        risk_id=risk_details["risk_id"] or None,
+        validate_type=risk_details["validate_type"] or None,
+        validate_scene=risk_details["validate_scene"] or None,
     )
 
     resources_started_at = time.time()
@@ -522,6 +548,35 @@ def _submit_email_verification(page: Page, acc: Dict[str, str], login_response: 
     return check_response
 
 
+def _complete_login_risk_challenge(page: Page, acc: Dict[str, str], login_response: Dict[str, Any]) -> Dict[str, str]:
+    risk_details = _login_risk_details(login_response)
+
+    if not risk_details["risk_id"] or not risk_details["validate_type"]:
+        raise RuntimeError(
+            "SHEIN login reported a risk challenge without risk_id/validate_type "
+            f"(code={risk_details['code'] or 'unknown'} msg={risk_details['msg']!r})"
+        )
+
+    if risk_details["validate_type"] == EMAIL_CAPTCHA_VALIDATE_TYPE:
+        _submit_email_verification(page, acc, login_response)
+    else:
+        raise RuntimeError(
+            "SHEIN requested unsupported login verification "
+            f"type={risk_details['validate_type']!r} "
+            f"scene={risk_details['validate_scene']!r} "
+            f"code={risk_details['code'] or 'unknown'} "
+            f"msg={risk_details['msg']!r}"
+        )
+
+    if not risk_details["validate_token"]:
+        raise RuntimeError("SHEIN risk challenge did not return a validate_token")
+
+    return {
+        "validate_token": risk_details["validate_token"],
+        "risk_id": risk_details["risk_id"],
+    }
+
+
 def ensure_logged_in_via_api(
     page: Page,
     base_url: str,
@@ -552,24 +607,16 @@ def ensure_logged_in_via_api(
         raise RuntimeError("SHEIN positioning did not return a risk_id for login")
 
     login_response = _runtime_call_export(page, COMMON_LOGIN_PATTERN, _login_payload(acc, biz_uuid=biz_uuid))
-    code = _response_code(login_response)
-    if code == "402922":
-        _submit_email_verification(page, acc, login_response)
-
-        risk_info = (login_response.get("info") or {}) if login_response else {}
-        validate_token = str(((risk_info.get("extend_info") or {}).get("validate_token")) or "")
-        risk_id = str(risk_info.get("risk_id") or "")
-        if not validate_token or not risk_id:
-            raise RuntimeError("SHEIN risk challenge did not return validate_token and risk_id")
-
+    if _has_login_risk_challenge(login_response):
+        risk_tokens = _complete_login_risk_challenge(page, acc, login_response)
         login_response = _runtime_call_export(
             page,
             COMMON_LOGIN_PATTERN,
             _login_payload(
                 acc,
                 biz_uuid=biz_uuid,
-                validate_token=validate_token,
-                risk_id=risk_id,
+                validate_token=risk_tokens["validate_token"],
+                risk_id=risk_tokens["risk_id"],
             ),
         )
 
