@@ -24,6 +24,7 @@ DEFAULT_VERIFY_TIMEOUT_SEC = 180
 DEFAULT_RISK_VERIFY_TIMEOUT_SEC = 240
 EMAIL_CAPTCHA_EXTRA_PARAM = {"akka": "1000114"}
 EMAIL_CAPTCHA_VALIDATE_TYPE = "email_captcha"
+GEETEST_RISK_CODES = {"402906", "402908", "402921"}
 
 WEBPACK_AUTH_HELPER = r"""
 () => {
@@ -331,6 +332,54 @@ def _compact_json(value: Any, limit: int = 2500) -> str:
     return text[:limit] + "...<truncated>"
 
 
+def _guess_login_risk_mapping(login_response: Dict[str, Any]) -> Dict[str, Optional[str]]:
+    details = _login_risk_details(login_response)
+    info = (login_response or {}).get("info") or {}
+    extend_info = info.get("extend_info") or {}
+    validate_common = extend_info.get("validate_common") or {}
+    validate_param = extend_info.get("validate_param") or {}
+    haystack = " ".join(
+        str(part or "").lower()
+        for part in (
+            details.get("code"),
+            details.get("validate_type"),
+            details.get("validate_scene"),
+            _compact_json(info),
+            _compact_json(extend_info),
+            _compact_json(validate_common),
+            _compact_json(validate_param),
+        )
+    )
+
+    family = None
+    subtype = None
+    source = None
+
+    if details.get("validate_type") == EMAIL_CAPTCHA_VALIDATE_TYPE or "email_captcha" in haystack:
+        family = "email_captcha"
+        subtype = "email_captcha"
+        source = "response payload"
+    elif details.get("code") in GEETEST_RISK_CODES:
+        family = "geetest"
+        source = "cached SHEIN client bundle + response code"
+    elif "geetest" in haystack:
+        family = "geetest"
+        source = "response payload"
+
+    if "geetest_verification_slide" in haystack or '"slide"' in haystack:
+        subtype = "slide"
+    elif "geetest_verification_icon" in haystack or '"icon"' in haystack:
+        subtype = "icon"
+    elif "fullpage" in haystack:
+        subtype = "fullpage"
+
+    return {
+        "family": family,
+        "subtype": subtype,
+        "source": source,
+    }
+
+
 def _validation_summary(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     data = payload or {}
     info = (data.get("info") or {}) if isinstance(data, dict) else {}
@@ -492,6 +541,7 @@ def _log_login_risk_challenge(page: Page, login_response: Dict[str, Any]) -> Non
     extend_info = info.get("extend_info") or {}
     validate_common = extend_info.get("validate_common") or {}
     validate_param = extend_info.get("validate_param") or {}
+    mapping = _guess_login_risk_mapping(login_response)
 
     _debug_log(
         "common_login risk challenge",
@@ -503,9 +553,17 @@ def _log_login_risk_challenge(page: Page, login_response: Dict[str, Any]) -> Non
         validate_scene=details["validate_scene"] or None,
         has_validate_token=bool(details["validate_token"]),
         validate_channel=extend_info.get("validate_channel"),
+        challenge_family_guess=mapping["family"],
+        challenge_subtype_guess=mapping["subtype"],
+        challenge_guess_source=mapping["source"],
+        extend_info_keys=sorted(str(key) for key in extend_info.keys()),
+        validate_common_keys=sorted(str(key) for key in validate_common.keys()),
+        validate_param_keys=sorted(str(key) for key in validate_param.keys()),
         masked_email=validate_param.get("email"),
         masked_phone=validate_param.get("phone"),
         validate_url=validate_common.get("url"),
+        raw_validate_common=_compact_json(validate_common),
+        raw_validate_param=_compact_json(validate_param),
         raw_info=_compact_json(info),
         raw_extend_info=_compact_json(extend_info),
     )
