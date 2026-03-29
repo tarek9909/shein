@@ -336,6 +336,7 @@ def _guess_login_risk_mapping(login_response: Dict[str, Any]) -> Dict[str, Optio
     details = _login_risk_details(login_response)
     info = (login_response or {}).get("info") or {}
     extend_info = info.get("extend_info") or {}
+    risk_info = info.get("riskInfo") or {}
     validate_common = extend_info.get("validate_common") or {}
     validate_param = extend_info.get("validate_param") or {}
     haystack = " ".join(
@@ -346,6 +347,7 @@ def _guess_login_risk_mapping(login_response: Dict[str, Any]) -> Dict[str, Optio
             details.get("validate_scene"),
             _compact_json(info),
             _compact_json(extend_info),
+            _compact_json(risk_info),
             _compact_json(validate_common),
             _compact_json(validate_param),
         )
@@ -520,13 +522,20 @@ def _login_payload(
 def _login_risk_details(login_response: Optional[Dict[str, Any]]) -> Dict[str, str]:
     info = (login_response or {}).get("info") or {}
     extend_info = info.get("extend_info") or {}
+    risk_info = info.get("riskInfo") or {}
+    captcha = risk_info.get("captcha") or {}
     return {
         "code": _response_code(login_response),
         "msg": _response_message(login_response),
-        "risk_id": str(info.get("risk_id") or ""),
-        "validate_token": str(extend_info.get("validate_token") or ""),
-        "validate_type": str(extend_info.get("validate_type") or ""),
-        "validate_scene": str(extend_info.get("validate_scene") or ""),
+        "risk_id": str(info.get("risk_id") or risk_info.get("riskId") or ""),
+        "validate_token": str(
+            extend_info.get("validate_token")
+            or risk_info.get("validate_token")
+            or captcha.get("validate_token")
+            or ""
+        ),
+        "validate_type": str(extend_info.get("validate_type") or captcha.get("name") or ""),
+        "validate_scene": str(extend_info.get("validate_scene") or risk_info.get("scene") or ""),
     }
 
 
@@ -539,6 +548,7 @@ def _log_login_risk_challenge(page: Page, login_response: Dict[str, Any]) -> Non
     details = _login_risk_details(login_response)
     info = (login_response or {}).get("info") or {}
     extend_info = info.get("extend_info") or {}
+    risk_info = info.get("riskInfo") or {}
     validate_common = extend_info.get("validate_common") or {}
     validate_param = extend_info.get("validate_param") or {}
     mapping = _guess_login_risk_mapping(login_response)
@@ -553,15 +563,19 @@ def _log_login_risk_challenge(page: Page, login_response: Dict[str, Any]) -> Non
         validate_scene=details["validate_scene"] or None,
         has_validate_token=bool(details["validate_token"]),
         validate_channel=extend_info.get("validate_channel"),
+        risk_message_type=risk_info.get("message_type"),
+        risk_decision=risk_info.get("riskDecision"),
         challenge_family_guess=mapping["family"],
         challenge_subtype_guess=mapping["subtype"],
         challenge_guess_source=mapping["source"],
+        risk_info_keys=sorted(str(key) for key in risk_info.keys()),
         extend_info_keys=sorted(str(key) for key in extend_info.keys()),
         validate_common_keys=sorted(str(key) for key in validate_common.keys()),
         validate_param_keys=sorted(str(key) for key in validate_param.keys()),
         masked_email=validate_param.get("email"),
         masked_phone=validate_param.get("phone"),
         validate_url=validate_common.get("url"),
+        raw_risk_info=_compact_json(risk_info),
         raw_validate_common=_compact_json(validate_common),
         raw_validate_param=_compact_json(validate_param),
         raw_info=_compact_json(info),
@@ -592,12 +606,46 @@ def _risk_payload_from_login(login_response: Dict[str, Any]) -> Dict[str, Any]:
     info = (login_response or {}).get("info") or {}
     payload = copy.deepcopy(info.get("extend_info") or {})
     if not payload:
-        raise RuntimeError("SHEIN login returned a risk challenge without extend_info")
+        risk_info = copy.deepcopy(info.get("riskInfo") or {})
+        captcha = risk_info.get("captcha") or {}
+        captcha_param = copy.deepcopy(captcha.get("param") or {})
+        captcha_name = str(captcha.get("name") or "")
+        scene = str(risk_info.get("scene") or "")
+        if not captcha_name:
+            raise RuntimeError("SHEIN login returned a risk challenge without extend_info or captcha.name")
+
+        payload = {
+            "validate_common": {},
+            "validate_channel": None,
+            "validate_type": captcha_name,
+            "validate_scene": scene,
+            "validate_param": captcha_param,
+        }
+        validate_token = str(
+            risk_info.get("validate_token")
+            or captcha.get("validate_token")
+            or ""
+        )
+        if validate_token:
+            payload["validate_token"] = validate_token
 
     validate_param = payload.setdefault("validate_param", {})
     validate_param.setdefault("sdk_version", "0.35.0")
     payload["validate_channel"] = None
     return payload
+
+
+def _normalized_login_risk_response(login_response: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = copy.deepcopy(login_response or {})
+    info = normalized.setdefault("info", {})
+    details = _login_risk_details(normalized)
+
+    if details["risk_id"] and not info.get("risk_id"):
+        info["risk_id"] = details["risk_id"]
+    if not info.get("extend_info"):
+        info["extend_info"] = _risk_payload_from_login(normalized)
+
+    return normalized
 
 
 def _ensure_gmail_credentials(acc: Dict[str, str]) -> None:
@@ -606,7 +654,7 @@ def _ensure_gmail_credentials(acc: Dict[str, str]) -> None:
     raise RuntimeError("Gmail credentials are required when SHEIN requests email verification")
 
 
-def _submit_email_verification(page: Page, acc: Dict[str, str], login_response: Dict[str, Any]) -> Dict[str, Any]:
+def _submit_email_verification(page: Page, acc: Dict[str, str], login_response: Dict[str, Any]) -> Dict[str, str]:
     risk_details = _login_risk_details(login_response)
     if risk_details["validate_type"] != EMAIL_CAPTCHA_VALIDATE_TYPE:
         raise RuntimeError(
@@ -710,7 +758,30 @@ def _submit_email_verification(page: Page, acc: Dict[str, str], login_response: 
         **_validation_summary(check_response),
     )
     _raise_on_bad_response("risk check", check_response)
-    return check_response
+
+    check_info = (check_response or {}).get("info") or {}
+    check_param = check_info.get("validate_param") or {}
+    resolved_validate_token = str(
+        check_info.get("validate_token")
+        or send_info.get("validate_token")
+        or (resources_response.get("info") or {}).get("validate_token")
+        or send_payload.get("validate_token")
+        or risk_details["validate_token"]
+        or ""
+    )
+    resolved_risk_id = str(
+        check_param.get("risk_id")
+        or send_info.get("risk_id")
+        or risk_details["risk_id"]
+        or ""
+    )
+    if not resolved_validate_token:
+        raise RuntimeError("SHEIN email verification completed but no validate_token was returned")
+
+    return {
+        "validate_token": resolved_validate_token,
+        "risk_id": resolved_risk_id,
+    }
 
 
 def _complete_login_risk_challenge(
@@ -720,7 +791,8 @@ def _complete_login_risk_challenge(
     *,
     biz_uuid: str,
 ) -> Dict[str, str]:
-    risk_details = _login_risk_details(login_response)
+    normalized_response = _normalized_login_risk_response(login_response)
+    risk_details = _login_risk_details(normalized_response)
 
     if not risk_details["risk_id"] or not risk_details["validate_type"]:
         raise RuntimeError(
@@ -731,7 +803,7 @@ def _complete_login_risk_challenge(
     login_payload = _login_payload(acc, biz_uuid=biz_uuid)
 
     try:
-        verify_result = _runtime_run_login_risk_verify(page, login_response, login_payload)
+        verify_result = _runtime_run_login_risk_verify(page, normalized_response, login_payload)
         verify_type = str((verify_result or {}).get("type") or "")
         verify_payload = (verify_result or {}).get("paramsData") or {}
         validate_token = str(verify_payload.get("validate_token") or "")
@@ -759,21 +831,13 @@ def _complete_login_risk_challenge(
         )
 
     if risk_details["validate_type"] == EMAIL_CAPTCHA_VALIDATE_TYPE:
-        _submit_email_verification(page, acc, login_response)
+        return _submit_email_verification(page, acc, normalized_response)
     else:
         raise RuntimeError(
             "SHEIN requested login verification but the in-page verifier did not return a token "
             f"(type={risk_details['validate_type']!r} scene={risk_details['validate_scene']!r} "
             f"code={risk_details['code'] or 'unknown'} msg={risk_details['msg']!r})"
         )
-
-    if not risk_details["validate_token"]:
-        raise RuntimeError("SHEIN risk challenge did not return a validate_token")
-
-    return {
-        "validate_token": risk_details["validate_token"],
-        "risk_id": risk_details["risk_id"],
-    }
 
 
 def ensure_logged_in_via_api(
