@@ -1,4 +1,5 @@
 import copy
+import json
 import time
 from typing import Any, Dict, Optional
 from urllib.parse import urlsplit, urlunsplit
@@ -320,6 +321,16 @@ def _debug_log(step: str, **fields: Any) -> None:
     print(f"[AUTH DEBUG] {step}: " + ", ".join(parts))
 
 
+def _compact_json(value: Any, limit: int = 2500) -> str:
+    try:
+        text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    except Exception:
+        text = repr(value)
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "...<truncated>"
+
+
 def _validation_summary(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     data = payload or {}
     info = (data.get("info") or {}) if isinstance(data, dict) else {}
@@ -473,6 +484,31 @@ def _login_risk_details(login_response: Optional[Dict[str, Any]]) -> Dict[str, s
 def _has_login_risk_challenge(login_response: Optional[Dict[str, Any]]) -> bool:
     details = _login_risk_details(login_response)
     return bool(details["risk_id"] and details["validate_type"])
+
+
+def _log_login_risk_challenge(page: Page, login_response: Dict[str, Any]) -> None:
+    details = _login_risk_details(login_response)
+    info = (login_response or {}).get("info") or {}
+    extend_info = info.get("extend_info") or {}
+    validate_common = extend_info.get("validate_common") or {}
+    validate_param = extend_info.get("validate_param") or {}
+
+    _debug_log(
+        "common_login risk challenge",
+        page_url=page.url,
+        code=details["code"] or None,
+        msg=details["msg"] or None,
+        risk_id=details["risk_id"] or None,
+        validate_type=details["validate_type"] or None,
+        validate_scene=details["validate_scene"] or None,
+        has_validate_token=bool(details["validate_token"]),
+        validate_channel=extend_info.get("validate_channel"),
+        masked_email=validate_param.get("email"),
+        masked_phone=validate_param.get("phone"),
+        validate_url=validate_common.get("url"),
+        raw_info=_compact_json(info),
+        raw_extend_info=_compact_json(extend_info),
+    )
 
 
 def _risk_payload_from_login(login_response: Dict[str, Any]) -> Dict[str, Any]:
@@ -694,6 +730,7 @@ def ensure_logged_in_via_api(
 
     login_response = _runtime_call_export(page, COMMON_LOGIN_PATTERN, _login_payload(acc, biz_uuid=biz_uuid))
     if _has_login_risk_challenge(login_response):
+        _log_login_risk_challenge(page, login_response)
         risk_tokens = _complete_login_risk_challenge(page, acc, login_response, biz_uuid=biz_uuid)
         login_response = _runtime_call_export(
             page,

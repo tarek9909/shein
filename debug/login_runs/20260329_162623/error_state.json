@@ -1,0 +1,222 @@
+{
+  "captured_at": "2026-03-29 16:27:09",
+  "page": {
+    "title": "Sign In",
+    "url": "https://ar.shein.com/user/auth/login?direction=nav",
+    "visible_buttons": [
+      {
+        "tag": "A",
+        "text": "",
+        "aria_label": null,
+        "class_name": "",
+        "id": "header_logo_icon",
+        "visible": true
+      },
+      {
+        "tag": "SECTION",
+        "text": "فساتين",
+        "aria_label": "البحث: فساتين",
+        "class_name": "search-box",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "aria_label": "البحث",
+        "class_name": "search-button",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "",
+        "aria_label": "personal center",
+        "class_name": "j-ipad-prevent-a j-header-username-icon sa_account",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "0",
+        "aria_label": "Save",
+        "class_name": "bsc-wish-list-entry_wrap",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "DIV",
+        "text": "",
+        "aria_label": "الخدمة للزبائن",
+        "class_name": "",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "DIV",
+        "text": "اختر لغتك المفضلة",
+        "aria_label": "Language and Currency Selector",
+        "class_name": "",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "BUTTON",
+        "text": "فئات",
+        "aria_label": "فئات",
+        "class_name": "bs-nav__cate first-cate",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "جديد في",
+        "aria_label": null,
+        "class_name": "bs-nav__cate-link a11y-focus",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "ملابس نسائية",
+        "aria_label": null,
+        "class_name": "bs-nav__cate-link a11y-focus",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "مقاسات كبيرة",
+        "aria_label": null,
+        "class_name": "bs-nav__cate-link a11y-focus",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "الأطفال",
+        "aria_label": null,
+        "class_name": "bs-nav__cate-link a11y-focus",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "الملابس الرجالية",
+        "aria_label": null,
+        "class_name": "bs-nav__cate-link a11y-focus",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "ملابس داخلية، وملابس نوم",
+        "aria_label": null,
+        "class_name": "bs-nav__cate-link a11y-focus",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "المنزل والمعيشة",
+        "aria_label": null,
+        "class_name": "bs-nav__cate-link a11y-focus",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "أحذية",
+        "aria_label": null,
+        "class_name": "bs-nav__cate-link a11y-focus",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "الصحة و الجمال",
+        "aria_label": null,
+        "class_name": "bs-nav__cate-link a11y-focus",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "الأطفال والأمومة",
+        "aria_label": null,
+        "class_name": "bs-nav__cate-link a11y-focus",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "مجوهرات واكسسوارات",
+        "aria_label": null,
+        "class_name": "bs-nav__cate-link a11y-focus",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "الحقائب والأمتعة",
+        "aria_label": null,
+        "class_name": "bs-nav__cate-link a11y-focus",
+        "id": "",
+        "visible": true
+      }
+    ],
+    "visible_inputs": [
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "name": "",
+        "id": "continue-alias-input",
+        "placeholder": "",
+        "autocomplete": "off",
+        "aria_label": "عنوان البريد الالكتروني:",
+        "value_preview": "",
+        "visible": true
+      },
+      {
+        "tag": "INPUT",
+        "type": "email",
+        "name": "",
+        "id": "",
+        "placeholder": "ادخلي بريدك الالكتروني",
+        "autocomplete": "",
+        "aria_label": "",
+        "value_preview": "",
+        "visible": true
+      },
+      {
+        "tag": "INPUT",
+        "type": "phone",
+        "name": "",
+        "id": "",
+        "placeholder": "رقم هاتفك للرسائل القصيرة",
+        "autocomplete": "",
+        "aria_label": "",
+        "value_preview": "",
+        "visible": true
+      },
+      {
+        "tag": "INPUT",
+        "type": "phone",
+        "name": "",
+        "id": "",
+        "placeholder": "حساب الواتساب",
+        "autocomplete": "",
+        "aria_label": "",
+        "value_preview": "",
+        "visible": true
+      }
+    ],
+    "dialogs": []
+  },
+  "extra": {
+    "phase": "error",
+    "error_type": "RuntimeError",
+    "error": "common_login failed with code=400504 msg='أدخلت البريد الإلكتروني او كلمة السر خطأ'",
+    "final_url": "https://ar.shein.com/user/auth/login?direction=nav"
+  }
+}
