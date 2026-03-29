@@ -567,6 +567,11 @@ def _log_login_risk_challenge(page: Page, login_response: Dict[str, Any]) -> Non
         raw_info=_compact_json(info),
         raw_extend_info=_compact_json(extend_info),
     )
+    _debug_log(
+        "common_login raw response",
+        code=details["code"] or None,
+        response_json=_compact_json(login_response, limit=12000),
+    )
 
 
 def _risk_payload_from_login(login_response: Dict[str, Any]) -> Dict[str, Any]:
