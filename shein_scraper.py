@@ -7,8 +7,9 @@ from typing import Dict, Any, Optional, List
 from urllib.parse import urlsplit, urlunsplit
 
 import anyio
-from playwright.sync_api import BrowserContext, sync_playwright, Page
+from playwright.sync_api import BrowserContext, sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
 
+from gmail import get_latest_shein_code
 from shein_auth_api import ensure_logged_in_via_api
 
 PROFILES_DIR = "profiles"
@@ -524,7 +525,7 @@ def _ensure_logged_in_via_form(
     email_input = page.locator("input#continue-alias-input").first
     try:
         email_input.wait_for(state="visible", timeout=30000)
-    except TimeoutError:
+    except PlaywrightTimeoutError:
         # Render/headless can re-render the login form while the locator is already present.
         # If it is actually visible now, continue. Otherwise try a broader fallback selector.
         try:
@@ -565,7 +566,7 @@ def _ensure_logged_in_via_form(
     ).first
     try:
         password_input = _wait_for_password_step(page, timeout_ms=30000)
-    except TimeoutError:
+    except PlaywrightTimeoutError:
         try:
             page.screenshot(path="debug_password_not_visible_after_continue.png", full_page=True)
             with open("debug_password_not_visible_after_continue.html", "w", encoding="utf-8") as f:
@@ -611,7 +612,7 @@ def _ensure_logged_in_via_form(
 
         page.wait_for_timeout(6000)
 
-    except TimeoutError:
+    except PlaywrightTimeoutError:
         pass
 
     # Step 4: optional post-login popup (Skip)
@@ -622,7 +623,7 @@ def _ensure_logged_in_via_form(
         skip_btn.wait_for(state="visible", timeout=5000)
         skip_btn.click()
         page.wait_for_timeout(1000)
-    except TimeoutError:
+    except PlaywrightTimeoutError:
         pass
     except Exception:
         pass
@@ -649,6 +650,10 @@ def _should_fallback_to_form_login(exc: Exception) -> bool:
         "slide",
         "click",
         "captcha",
+        "timed out",
+        "timeout",
+        "window.__sheinapiauth",
+        "webpackchunkshein_w",
     )
     return any(marker in message for marker in risk_markers)
 
@@ -661,7 +666,7 @@ def ensure_logged_in(page: Page, base_url: str, acc: dict, fetch_url: Optional[s
     """
     try:
         ensure_logged_in_via_api(page, base_url, acc, fetch_url=fetch_url)
-    except RuntimeError as exc:
+    except (RuntimeError, PlaywrightTimeoutError) as exc:
         if not _should_fallback_to_form_login(exc):
             raise
 

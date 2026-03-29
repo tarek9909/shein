@@ -1,0 +1,307 @@
+{
+  "captured_at": "2026-03-29 16:13:56",
+  "page": {
+    "title": "Sign In",
+    "url": "https://ar.shein.com/user/auth/login?direction=nav",
+    "visible_buttons": [
+      {
+        "tag": "A",
+        "text": "",
+        "aria_label": null,
+        "class_name": "",
+        "id": "header_logo_icon",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "",
+        "aria_label": "حسابي",
+        "class_name": "j-ipad-prevent-a j-header-username-icon sa_account",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "0",
+        "aria_label": null,
+        "class_name": "j-ipad-prevent-a j-sa-cart-1",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "0",
+        "aria_label": null,
+        "class_name": "header-wishlist",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "جديد في",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "ملابس نسائية",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "مقاسات كبيرة",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "الأطفال",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "الملابس الرجالية",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "ملابس داخلية، وملابس نوم",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "المنزل والمعيشة",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "أحذية",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "الصحة و الجمال",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "الأطفال والأمومة",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "مجوهرات واكسسوارات",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "الحقائب والأمتعة",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "الرياضة والأنشطة الخارجية",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "منسوجات منزلية",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "هواتف خليوية & إكسسوارات",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "إلكترونيات",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "الألعاب",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "أدوات وتحسين المنزل",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "مستلزمات مكتبية ومدرسية",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "أجهزة",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "السيارات",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "مستلزمات الحيوانات الأليفة",
+        "aria_label": null,
+        "class_name": "header-optimize__cate header-optimize__cate-link",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "BUTTON",
+        "text": "متابعة",
+        "aria_label": null,
+        "class_name": "sui-button-common sui-button-common__primary sui-button-common__H44PX page__login_mainButton",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "BUTTON",
+        "text": "الاستمرار بجوجل Google",
+        "aria_label": "الاستمرار بجوجل Google",
+        "class_name": "sui-button-common sui-button-common__default sui-button-common__H44PX google-btn",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "BUTTON",
+        "text": "الاستمرار بالفيسبوك Facebook",
+        "aria_label": "الاستمرار بالفيسبوك Facebook",
+        "class_name": "sui-button-common sui-button-common__default sui-button-common__H44PX facebook-btn",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "P",
+        "text": "",
+        "aria_label": "Switch site: undefined",
+        "class_name": "page__login-newUI-switchSiteTab_con",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "سياسة الخصوصية وملفات تعريف الارتباط",
+        "aria_label": null,
+        "class_name": "j-privacy-and-cookies",
+        "id": "",
+        "visible": true
+      },
+      {
+        "tag": "A",
+        "text": "الشروط والأحكام",
+        "aria_label": null,
+        "class_name": "j-terms-and-conditions",
+        "id": "",
+        "visible": true
+      }
+    ],
+    "visible_inputs": [
+      {
+        "tag": "INPUT",
+        "type": "",
+        "name": "",
+        "id": "",
+        "placeholder": "",
+        "autocomplete": "",
+        "aria_label": "",
+        "value_preview": "",
+        "visible": true
+      },
+      {
+        "tag": "INPUT",
+        "type": "search",
+        "name": "header-search",
+        "id": "",
+        "placeholder": "",
+        "autocomplete": "off",
+        "aria_label": "",
+        "value_preview": "",
+        "visible": true
+      },
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "name": "",
+        "id": "continue-alias-input",
+        "placeholder": "",
+        "autocomplete": "off",
+        "aria_label": "عنوان البريد الالكتروني:",
+        "value_preview": "",
+        "visible": true
+      }
+    ],
+    "dialogs": []
+  },
+  "extra": {
+    "phase": "error",
+    "error_type": "TimeoutError",
+    "error": "Page.wait_for_function: Timeout 30000ms exceeded.",
+    "final_url": "https://ar.shein.com/user/auth/login?direction=nav"
+  }
+}
