@@ -458,6 +458,7 @@ def _first_visible_locator(page: Page, selectors: List[str]):
 
 def _wait_for_password_step(page: Page, timeout_ms: int = 30000):
     password_selectors = [
+        '#email-pannel-password-input',
         'input[type="password"]',
         'input[autocomplete="current-password"]',
         'input[name*="password" i]',
@@ -500,8 +501,7 @@ def _wait_for_password_step(page: Page, timeout_ms: int = 30000):
         'input[aria-label*="كلمة"], input[placeholder*="كلمة"], '
         'input[aria-label*="Password" i], input[placeholder*="Password" i]'
     ).first
-    password_input.wait_for(state="visible", timeout=1)
-    return password_input
+    raise PlaywrightTimeoutError("Timed out waiting for SHEIN password step after clicking Continue")
 
 
 def _ensure_logged_in_via_form(
@@ -574,12 +574,37 @@ def _ensure_logged_in_via_form(
         except Exception:
             pass
         raise
+    dialog_email_input = _first_visible_locator(
+        page,
+        [
+            "#email-pannel-email-input",
+            'input[id*="email" i][id*="pannel" i]',
+        ],
+    )
+    if dialog_email_input:
+        try:
+            dialog_email_input.click()
+            dialog_email_input.press("Control+A")
+            dialog_email_input.fill(acc["shein_email"])
+        except Exception:
+            pass
+
     password_input.click()
     password_input.fill(acc["shein_password"])
 
     signin = page.locator("button.page__login_mainButton:has-text('تسجيل الدخول')").first
     if signin.count() == 0:
         signin = page.locator("button:has-text('تسجيل الدخول')").first
+    dialog_signin = _first_visible_locator(
+        page,
+        [
+            ".sui-dialog button.page__login_mainButton",
+            ".sui-dialog button:has-text('تسجيل الدخول')",
+            "button.page__login_mainButton",
+        ],
+    )
+    if dialog_signin:
+        signin = dialog_signin
     signin.wait_for(state="visible", timeout=10000)
     signin.click()
 
